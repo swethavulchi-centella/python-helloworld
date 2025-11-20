@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, dev ]
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
 
 jobs:
   sonar:
@@ -15,11 +15,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Java (required by sonar-scanner)
+      # --- Ensure Java 17 is installed and active BEFORE installing/running scanner ---
+      - name: Setup Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+
+      - name: Verify Java version
+        run: |
+          java -version
+          which java
 
       - name: Install sonar-scanner CLI
         run: |
