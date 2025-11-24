@@ -22,21 +22,44 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Download Sonar Issues JSON
-        run: |
-          curl -u ${{ secrets.SONAR_TOKEN }}: \
-            "${{ secrets.SONAR_HOST_URL }}/api/issues/search?componentKeys=SQ_KBInvoicetoPay" \
-            -o sonar-issues.json
-
-      - name: Upload Issues Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: sonar-issues
-          path: sonar-issues.json
-
-
       - name: SonarQube Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # ------------------------
+      # DOWNLOAD REPORTS
+      # ------------------------
+
+      - name: Download Sonar Issues JSON
+        run: |
+          curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+            "${{ secrets.SONAR_HOST_URL }}/api/issues/search?componentKeys=SQ_KBInvoicetoPay&ps=500" \
+            -o sonarqube-issues.json
+
+      - name: Download Sonar Metrics JSON
+        run: |
+          curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
+            "${{ secrets.SONAR_HOST_URL }}/api/measures/component?component=SQ_KBInvoicetoPay&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density" \
+            -o sonarqube-metrics.json
+
+      - name: Generate Markdown Report
+        run: |
+          echo "# SonarQube Report" > sonarqube-report.md
+          echo "Generated on: $(date)" >> sonarqube-report.md
+          echo "" >> sonarqube-report.md
+          echo "## Metrics" >> sonarqube-report.md
+          cat sonarqube-metrics.json | jq '.component.measures' >> sonarqube-report.md
+          echo "" >> sonarqube-report.md
+          echo "## Issues Summary" >> sonarqube-report.md
+          cat sonarqube-issues.json | jq '{total: .total, issues: [.issues[] | {severity, message, component}]}' >> sonarqube-report.md
+
+      - name: Upload Sonar Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-reports
+          path: |
+            sonarqube-issues.json
+            sonarqube-metrics.json
+            sonarqube-report.md
