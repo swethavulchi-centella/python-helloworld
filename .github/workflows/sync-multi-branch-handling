@@ -1,0 +1,91 @@
+name: Manual Sync to Client Repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: "Source branch in company repo"
+        required: true
+        default: "main"
+        type: choice
+        options:
+          - main
+          - dev
+          - test
+          - prod
+      target_branch:
+        description: "Target branch in client repo (leave empty to use same as source)"
+        required: false
+        default: ""
+      force:
+        description: "Force push to client? (be careful!)"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout company repo branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.source_branch }}
+
+      - name: Compute branches
+        id: vars
+        run: |
+          SRC="${{ github.event.inputs.source_branch }}"
+          TARGET="${{ github.event.inputs.target_branch }}"
+
+          # If target not specified, use same as source
+          if [ -z "$TARGET" ]; then
+            TARGET="$SRC"
+          fi
+
+          echo "src_branch=$SRC" >> $GITHUB_OUTPUT
+          echo "target_branch=$TARGET" >> $GITHUB_OUTPUT
+
+      - name: Add client remote and push
+        env:
+          CLIENT_PAT: ${{ secrets.CLIENT_PAT }}
+        run: |
+          if [ -z "$CLIENT_PAT" ]; then
+            echo "CLIENT_PAT secret is not set. Please add it in repo settings."
+            exit 1
+          fi
+
+          # Use correct branch names from previous step
+          SRC="${{ steps.vars.outputs.src_branch }}"
+          TARGET="${{ steps.vars.outputs.target_branch }}"
+          FORCE="${{ github.event.inputs.force }}"
+
+          echo "Source branch (company): $SRC"
+          echo "Target branch (client): $TARGET"
+          echo "Force push: $FORCE"
+
+          # Remove GitHub Actions bot header so PAT is actually used
+          git config --unset-all http.https://github.com/.extraheader || true
+
+          # Clean up any existing 'client' remote if rerun
+          git remote remove client || true
+
+          # Add client repo as remote using USERNAME:PAT
+          git remote add client https://$GITHUB_ACTOR:$CLIENT_PAT@github.com/swethavulchi-centella/python-helloworld.git
+
+          echo "Configured remotes:"
+          git remote -v
+
+          # Build push command
+          PUSH_CMD="git push client refs/heads/${SRC}:refs/heads/${TARGET}"
+          if [ "$FORCE" = "true" ]; then
+            PUSH_CMD="$PUSH_CMD --force"
+          fi
+
+          echo "Running: $PUSH_CMD"
+          eval "$PUSH_CMD"
