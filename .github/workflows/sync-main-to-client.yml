@@ -18,18 +18,24 @@ jobs:
         env:
           CLIENT_PAT: ${{ secrets.CLIENT_PAT }}
         run: |
+          # 1) Ensure PAT is present
           if [ -z "$CLIENT_PAT" ]; then
             echo "CLIENT_PAT secret is not set. Please add it in repo settings."
             exit 1
           fi
 
-          # Clean up any existing 'client' remote if rerun
+          # 2) Remove the auth header that checkout set for github.com
+          #    (this is what forces github-actions[bot] auth)
+          git config --unset-all http.https://github.com/.extraheader || true
+
+          # 3) Clean up any existing 'client' remote if rerun
           git remote remove client || true
 
-          # Add client repo as remote using PAT
-          #git remote add client https://$CLIENT_PAT@github.com/swethavulchi-centella/python-helloworld.git
+          # 4) Add client repo as remote using USERNAME:PAT
           git remote add client https://$GITHUB_ACTOR:$CLIENT_PAT@github.com/swethavulchi-centella/python-helloworld.git
 
+          echo "Configured remotes:"
+          git remote -v
 
           echo "Pushing company main -> client main"
           git push client main:main
